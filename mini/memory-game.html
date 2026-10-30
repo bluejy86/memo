@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>메모리 카드 게임</title>
+<style>
+  :root {
+    --accent: #5f7d1f;
+    --ink: #151515;
+    --muted: #55554f;
+    --bg: #f4f3ee;
+    --card: #fbfbf7;
+    --line: #d9d8d0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(180deg, #e9ecd9 0%, var(--bg) 40%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 48px 16px;
+  }
+  main { width: 100%; max-width: 480px; text-align: center; }
+  h1 { font-size: 36px; font-weight: 800; letter-spacing: -0.04em; margin-bottom: 8px; }
+  .sub { color: var(--muted); margin-bottom: 28px; }
+  .bar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px; font-size: 15px; color: var(--muted);
+  }
+  .bar b { color: var(--ink); }
+  .btn {
+    background: var(--ink); color: #fff; border: 1px solid var(--ink);
+    font: inherit; font-weight: 600; font-size: 14px;
+    padding: 10px 20px; border-radius: 999px; cursor: pointer;
+    transition: background .2s, color .2s;
+  }
+  .btn:hover { background: transparent; color: var(--ink); }
+
+  .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .card {
+    aspect-ratio: 1; border: 0; background: none; cursor: pointer;
+    perspective: 600px; font: inherit;
+  }
+  .inner {
+    position: relative; width: 100%; height: 100%;
+    transform-style: preserve-3d; transition: transform .4s;
+  }
+  .card.open .inner, .card.matched .inner { transform: rotateY(180deg); }
+  .face {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    border-radius: 16px; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  }
+  .back { background: var(--accent); color: #fff; font-size: 28px; font-weight: 700; }
+  .front {
+    background: var(--card); border: 1px solid var(--line);
+    font-size: clamp(30px, 10vw, 48px); transform: rotateY(180deg);
+  }
+  .card.matched .front { background: #e4e9cf; border-color: var(--accent); }
+  .card:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; border-radius: 16px; }
+
+  .win {
+    margin-top: 28px; padding: 24px; border-radius: 20px;
+    background: var(--card); border: 1px solid var(--line);
+  }
+  .win[hidden] { display: none; }
+  .win h2 { font-size: 24px; letter-spacing: -0.03em; margin-bottom: 4px; }
+  .win p { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>메모리 카드 게임</h1>
+  <p class="sub">카드를 뒤집어 같은 그림 두 장을 맞춰 보세요.</p>
+  <div class="bar">
+    <span>시도 <b id="tries">0</b></span>
+    <span>맞춘 쌍 <b id="pairs">0</b>/8</span>
+    <button class="btn" id="restart" type="button">다시 시작</button>
+  </div>
+  <div class="board" id="board"></div>
+  <div class="win" id="win" hidden>
+    <h2>🎉 모두 맞혔어요!</h2>
+    <p>총 <b id="final"></b>번 만에 완성했어요.</p>
+  </div>
+</main>
+
+<script>
+  const EMOJIS = ['🍎', '🐶', '🚀', '🌸', '⚽', '🎧', '🐱', '🍕'];
+  const board = document.getElementById('board');
+  const triesEl = document.getElementById('tries');
+  const pairsEl = document.getElementById('pairs');
+  const winEl = document.getElementById('win');
+  let open = [], tries = 0, pairs = 0, locked = false;
+
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function start() {
+    open = []; tries = 0; pairs = 0; locked = false;
+    triesEl.textContent = 0; pairsEl.textContent = 0; winEl.hidden = true;
+    board.innerHTML = '';
+    shuffle([...EMOJIS, ...EMOJIS]).forEach(emoji => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'card';
+      card.dataset.emoji = emoji;
+      card.setAttribute('aria-label', '카드');
+      card.innerHTML = '<div class="inner"><div class="face back">?</div><div class="face front">' + emoji + '</div></div>';
+      card.addEventListener('click', () => flip(card));
+      board.appendChild(card);
+    });
+  }
+
+  function flip(card) {
+    if (locked || card.classList.contains('open') || card.classList.contains('matched')) return;
+    card.classList.add('open');
+    open.push(card);
+    if (open.length < 2) return;
+
+    tries++;
+    triesEl.textContent = tries;
+    const [a, b] = open;
+    if (a.dataset.emoji === b.dataset.emoji) {
+      a.classList.replace('open', 'matched');
+      b.classList.replace('open', 'matched');
+      open = [];
+      pairsEl.textContent = ++pairs;
+      if (pairs === EMOJIS.length) {
+        document.getElementById('final').textContent = tries;
+        winEl.hidden = false;
+      }
+    } else {
+      locked = true;
+      setTimeout(() => {
+        a.classList.remove('open');
+        b.classList.remove('open');
+        open = [];
+        locked = false;
+      }, 800);
+    }
+  }
+
+  document.getElementById('restart').addEventListener('click', start);
+  start();
+</script>
+</body>
+</html>
